@@ -9,6 +9,7 @@ using CSVData = std::vector<std::vector<std::string>>;
 class CSVReader {
 public:
     static CSVData readCSV(const std::string& filename);
+    static bool writeCSV(const std::string& filename, const CSVData& data);
 };
 
 #endif
