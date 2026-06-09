@@ -10,12 +10,14 @@ private:
     std::string currentFilename;
 
 public:
-    // Loads raw data csv
     bool loadRawDataFile(const std::string& filename);
-    // Loads from Local Budget csv
     bool loadBudgetFile(const std::string& filename);
-    //add transaction to the dataset
-    void addTransaction(const Transaction& t);
-    //saves to Local Budget csv
     bool saveBudgetFile();
+    
+    void addTransaction(const Transaction& t);
+    
+    std::vector<Transaction> getTransactionsMonth(int month, int year) const;
+    std::vector<Transaction> getTransactionsYear(int year) const;
+    
+    bool changeTransactionCategory(const std::string& hash, const std::string& newCategory);
 };
