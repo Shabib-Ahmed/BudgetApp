@@ -114,8 +114,6 @@ bool BudgetManager::loadBudgetFile(const std::string& filename) {
     return true;
 }
 
-      
-
 void BudgetManager::addTransaction(const Transaction& t) {
     for (const auto& existing : transactions) {
         if (existing.transactionHash == t.transactionHash) {
@@ -147,4 +145,34 @@ bool BudgetManager::saveBudgetFile() {
     }
 
     return CSVReader::writeCSV(currentFilename, outputData);
+}
+
+std::vector<Transaction> BudgetManager::getTransactionsMonth(int month, int year) const {
+    std::vector<Transaction> filteredTransactions;
+    for (const auto& t : transactions) {
+        if (t.month == month && t.year == year) {
+            filteredTransactions.push_back(t);
+        }
+    }
+    return filteredTransactions;
+}
+
+std::vector<Transaction> BudgetManager::getTransactionsYear(int year) const {
+    std::vector<Transaction> filteredTransactions;
+    for (const auto& t : transactions) {
+        if (t.year == year) {
+            filteredTransactions.push_back(t);
+        }
+    }
+    return filteredTransactions;
+}
+
+bool BudgetManager::changeTransactionCategory(const std::string& hash, const std::string& newCategory) {
+    for (auto& t : transactions) {
+        if (t.transactionHash == hash) {
+            t.Category = newCategory; 
+            return true;              
+        }
+    }
+    return false; 
 }
