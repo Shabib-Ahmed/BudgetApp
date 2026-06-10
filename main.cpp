@@ -4,7 +4,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
-#include <commdlg.h>
+#include <shobjidl.h> 
 #include <string>
 #include <vector>
 #include <map>
@@ -15,7 +15,7 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "comctl32.lib")
-#pragma comment(lib, "comdlg32.lib")
+#pragma comment(lib, "ole32.lib")
 
 BudgetManager g_BudgetManager;
 std::vector<Transaction> g_CurrentTransactions;
@@ -69,33 +69,43 @@ void RefreshData(HWND hwndListView) {
 }
 
 void OnOpenFile(HWND hwndOwner, HWND hwndListView) {
-    OPENFILENAME ofn;
-    wchar_t szFile[260] = { 0 };
-
-    ZeroMemory(&ofn, sizeof(ofn));
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hwndOwner;
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = sizeof(szFile);
-    ofn.lpstrFilter = L"CSV Files (*.csv)\0*.csv\0All Files (*.*)\0*.*\0";
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFileTitle = NULL;
-    ofn.nMaxFileTitle = 0;
-    ofn.lpstrInitialDir = NULL;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER;
-
-    if (GetOpenFileName(&ofn) == TRUE) {
-        std::wstring ws(szFile);
-        std::string filePath(ws.begin(), ws.end());
+    IFileOpenDialog* pFileOpen = nullptr;
+    
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
+    
+    if (SUCCEEDED(hr)) {
+        COMDLG_FILTERSPEC fileTypes[] = { { L"CSV Files", L"*.csv" }, { L"All Files", L"*.*" } };
+        pFileOpen->SetFileTypes(2, fileTypes);
         
-        if (g_BudgetManager.loadRawDataFile(filePath)) {
-            g_BudgetManager.saveBudgetFile();
-            RefreshData(hwndListView);
-            MessageBox(hwndOwner, L"Raw data integrated and permanently saved to master local database!", L"Success", MB_OK | MB_ICONINFORMATION);
-            InvalidateRect(hwndOwner, NULL, TRUE);
-        } else {
-            MessageBox(hwndOwner, L"Failed to read or parse the chosen raw CSV format.", L"Parsing Error", MB_OK | MB_ICONERROR);
+        hr = pFileOpen->Show(hwndOwner);
+        
+        if (SUCCEEDED(hr)) {
+            IShellItem* pItem = nullptr;
+            hr = pFileOpen->GetResult(&pItem);
+            
+            if (SUCCEEDED(hr)) {
+                PWSTR pszFilePath = nullptr;
+                hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
+                
+                if (SUCCEEDED(hr)) {
+                    std::wstring ws(pszFilePath);
+                    std::string filePath(ws.begin(), ws.end());
+                    
+                    if (g_BudgetManager.loadRawDataFile(filePath)) {
+                        g_BudgetManager.saveBudgetFile();
+                        RefreshData(hwndListView);
+                        MessageBoxW(hwndOwner, L"Raw data integrated and permanently saved to master local database!", L"Success", MB_OK | MB_ICONINFORMATION);
+                        InvalidateRect(hwndOwner, NULL, TRUE);
+                    } else {
+                        MessageBoxW(hwndOwner, L"Failed to read or parse the chosen raw CSV format.", L"Parsing Error", MB_OK | MB_ICONERROR);
+                    }
+                    
+                    CoTaskMemFree(pszFilePath);
+                }
+                pItem->Release();
+            }
         }
+        pFileOpen->Release();
     }
 }
 
@@ -117,8 +127,8 @@ void DrawBudgetCircleAndSummary(HWND hwnd, HDC hdc) {
     std::wstring summaryOut = L"Total Out (Spending): $" + std::to_wstring(static_cast<int>(totalSpending));
     std::wstring summaryIn  = L"Total In (Payments):  $" + std::to_wstring(static_cast<int>(totalPayments));
     
-    TextOut(hdc, 20, 155, summaryOut.c_str(), static_cast<int>(summaryOut.length()));
-    TextOut(hdc, 20, 175, summaryIn.c_str(), static_cast<int>(summaryIn.length()));
+    TextOutW(hdc, 20, 155, summaryOut.c_str(), static_cast<int>(summaryOut.length()));
+    TextOutW(hdc, 20, 175, summaryIn.c_str(), static_cast<int>(summaryIn.length()));
 
     int left = 35, top = 205, right = 165, bottom = 335;
     int centerX = (left + right) / 2;
@@ -166,7 +176,7 @@ void DrawBudgetCircleAndSummary(HWND hwnd, HDC hdc) {
 
         std::wstring catName(pair.first.begin(), pair.first.end());
         std::wstring label = catName + L": $" + std::to_wstring(static_cast<int>(pair.second));
-        TextOut(hdc, 38, legendY, label.c_str(), static_cast<int>(label.length()));
+        TextOutW(hdc, 38, legendY, label.c_str(), static_cast<int>(label.length()));
 
         legendY += 18;
         colorIndex++;
@@ -183,40 +193,40 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
         HMENU hMenuBar = CreateMenu();
         HMENU hFileMenu = CreateMenu();
-        AppendMenu(hFileMenu, MF_STRING, ID_MENU_OPEN, L"&Import Data From File Explorer...");
-        AppendMenu(hMenuBar, MF_POPUP, (UINT_PTR)hFileMenu, L"&File");
+        AppendMenuW(hFileMenu, MF_STRING, ID_MENU_OPEN, L"&Import Data From File Explorer...");
+        AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hFileMenu, L"&File");
         SetMenu(hwnd, hMenuBar);
 
-        CreateWindow(L"BUTTON", L"Report Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 
+        CreateWindowW(L"BUTTON", L"Report Settings", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 
                      10, 5, 190, 120, hwnd, NULL, NULL, NULL);
 
-        CreateWindow(L"BUTTON", L"Monthly", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP, 
+        CreateWindowW(L"BUTTON", L"Monthly", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP, 
                      20, 25, 75, 20, hwnd, (HMENU)ID_RADIO_MONTHLY, NULL, NULL);
         CheckDlgButton(hwnd, ID_RADIO_MONTHLY, BST_CHECKED);
 
-        CreateWindow(L"BUTTON", L"Yearly", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 
+        CreateWindowW(L"BUTTON", L"Yearly", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON, 
                      110, 25, 75, 20, hwnd, (HMENU)ID_RADIO_YEARLY, NULL, NULL);
 
-        hwndComboMonth = CreateWindow(L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, 
+        hwndComboMonth = CreateWindowW(L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, 
                                       20, 55, 160, 200, hwnd, (HMENU)ID_COMBO_MONTH, NULL, NULL);
         const wchar_t* months[] = { L"January", L"February", L"March", L"April", L"May", L"June", 
                                     L"July", L"August", L"September", L"October", L"November", L"December" };
-        for (int i = 0; i < 12; ++i) SendMessage(hwndComboMonth, CB_ADDSTRING, 0, (LPARAM)months[i]);
-        SendMessage(hwndComboMonth, CB_SETCURSEL, g_SelectedMonth - 1, 0);
+        for (int i = 0; i < 12; ++i) SendMessageW(hwndComboMonth, CB_ADDSTRING, 0, (LPARAM)months[i]);
+        SendMessageW(hwndComboMonth, CB_SETCURSEL, g_SelectedMonth - 1, 0);
 
-        hwndComboYear = CreateWindow(L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, 
+        hwndComboYear = CreateWindowW(L"COMBOBOX", NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, 
                                      20, 85, 160, 200, hwnd, (HMENU)ID_COMBO_YEAR, NULL, NULL);
         const wchar_t* years[] = { L"2024", L"2025", L"2026", L"2027" };
-        for (int i = 0; i < 4; ++i) SendMessage(hwndComboYear, CB_ADDSTRING, 0, (LPARAM)years[i]);
-        SendMessage(hwndComboYear, CB_SETCURSEL, 2, 0); 
+        for (int i = 0; i < 4; ++i) SendMessageW(hwndComboYear, CB_ADDSTRING, 0, (LPARAM)years[i]);
+        SendMessageW(hwndComboYear, CB_SETCURSEL, 2, 0); 
 
-        CreateWindow(L"BUTTON", L"Visual Breakdown (Category Spending)", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 
+        CreateWindowW(L"BUTTON", L"Visual Breakdown (Category Spending)", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 
                      10, 135, 190, 310, hwnd, NULL, NULL, NULL);
 
-        hwndListView = CreateWindow(WC_LISTVIEW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | WS_BORDER, 
+        hwndListView = CreateWindowW(WC_LISTVIEW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | WS_BORDER, 
                                     210, 12, 560, 433, hwnd, (HMENU)ID_LISTVIEW, NULL, NULL);
 
-        LVCOLUMN lvc = {0};
+        LVCOLUMNW lvc = {0};
         lvc.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
         lvc.pszText = (LPWSTR)L"Date"; lvc.cx = 85; ListView_InsertColumn(hwndListView, 0, &lvc);
         lvc.pszText = (LPWSTR)L"Description"; lvc.cx = 245; ListView_InsertColumn(hwndListView, 1, &lvc);
@@ -224,7 +234,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         lvc.pszText = (LPWSTR)L"Amount"; lvc.cx = 90; ListView_InsertColumn(hwndListView, 3, &lvc);
 
         EnumChildWindows(hwnd, [](HWND child, LPARAM lp) -> BOOL {
-            SendMessage(child, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+            SendMessageW(child, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
             return TRUE;
         }, 0);
 
@@ -235,10 +245,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     case WM_COMMAND: {
         if (HIWORD(wParam) == CBN_SELCHANGE) {
             if (LOWORD(wParam) == ID_COMBO_MONTH) {
-                g_SelectedMonth = static_cast<int>(SendMessage(hwndComboMonth, CB_GETCURSEL, 0, 0)) + 1;
+                g_SelectedMonth = static_cast<int>(SendMessageW(hwndComboMonth, CB_GETCURSEL, 0, 0)) + 1;
             } else if (LOWORD(wParam) == ID_COMBO_YEAR) {
                 wchar_t yearStr[8];
-                SendMessage(hwndComboYear, CB_GETLBTEXT, SendMessage(hwndComboYear, CB_GETCURSEL, 0, 0), (LPARAM)yearStr);
+                SendMessageW(hwndComboYear, CB_GETLBTEXT, SendMessageW(hwndComboYear, CB_GETCURSEL, 0, 0), (LPARAM)yearStr);
                 g_SelectedYear = _wtoi(yearStr);
             }
             RefreshData(hwndListView);
@@ -274,23 +284,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     }
 
     case WM_DESTROY:
+        CoUninitialize();
         PostQuitMessage(0);
         return 0;
     }
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    const wchar_t CLASS_NAME[] = L"Win98BudgetManagerClassV3";
-    WNDCLASS wc = {0};
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+    const wchar_t CLASS_NAME[] = L"Win98BudgetManagerClassV5";
+    WNDCLASSW wc = {0};
     wc.lpfnWndProc   = WindowProc;
     wc.hInstance     = hInstance;
     wc.lpszClassName = CLASS_NAME;
     wc.hbrBackground = (HBRUSH)(COLOR_3DFACE + 1);
 
-    RegisterClass(&wc);
+    RegisterClassW(&wc);
 
-    HWND hwnd = CreateWindowEx(0, CLASS_NAME, L"Personal Budget Manager", 
+    HWND hwnd = CreateWindowExW(0, CLASS_NAME, L"Personal Budget Manager", 
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 
                                CW_USEDEFAULT, CW_USEDEFAULT, 800, 515, NULL, NULL, hInstance, NULL);
 
@@ -298,9 +311,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     ShowWindow(hwnd, nCmdShow);
 
     MSG msg = {0};
-    while (GetMessage(&msg, NULL, 0, 0)) {
+    while (GetMessageW(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
-        DispatchMessage(&msg);
+        DispatchMessageW(&msg);
     }
     return 0;
 }
