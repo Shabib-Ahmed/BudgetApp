@@ -4,7 +4,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
-#include <commdlg.h> 
+#include <commdlg.h>
 #include <string>
 #include <vector>
 #include <map>
@@ -17,7 +17,6 @@
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "comdlg32.lib")
 
-// Global State
 BudgetManager g_BudgetManager;
 std::vector<Transaction> g_CurrentTransactions;
 bool g_IsMonthly = true;
@@ -32,22 +31,23 @@ int g_SelectedYear = 2026;
 #define ID_MENU_OPEN     106
 
 const COLORREF K_PALETTE[] = {
-    RGB(200, 50, 50),   // Red
-    RGB(50, 50, 200),   // Blue
-    RGB(200, 150, 50),  // Orange
-    RGB(150, 50, 150),  // Purple
-    RGB(50, 150, 150),  // Cyan
-    RGB(120, 120, 120)  // Gray
+    RGB(200, 50, 50),
+    RGB(50, 50, 200),
+    RGB(200, 150, 50),
+    RGB(150, 50, 150),
+    RGB(50, 150, 150),
+    RGB(120, 120, 120)
 };
 
 void RefreshData(HWND hwndListView) {
+    if (!hwndListView) return;
+
     if (g_IsMonthly) {
         g_CurrentTransactions = g_BudgetManager.getTransactionsMonth(g_SelectedMonth, g_SelectedYear);
     } else {
         g_CurrentTransactions = g_BudgetManager.getTransactionsYear(g_SelectedYear);
     }
 
-    // Populate List View
     ListView_DeleteAllItems(hwndListView);
     for (size_t i = 0; i < g_CurrentTransactions.size(); ++i) {
         const auto& t = g_CurrentTransactions[i];
@@ -59,7 +59,7 @@ void RefreshData(HWND hwndListView) {
 
         LVITEM lvi = {0};
         lvi.mask = LVIF_TEXT;
-        lvi.iItem = i;
+        lvi.iItem = static_cast<int>(i);
 
         lvi.iSubItem = 0; lvi.pszText = (LPWSTR)dateStr.c_str(); ListView_InsertItem(hwndListView, &lvi);
         lvi.iSubItem = 1; lvi.pszText = (LPWSTR)descStr.c_str(); ListView_SetItem(hwndListView, &lvi);
@@ -68,13 +68,13 @@ void RefreshData(HWND hwndListView) {
     }
 }
 
-void OnOpenFile(HWND hwnd, HWND hwndListView) {
+void OnOpenFile(HWND hwndOwner, HWND hwndListView) {
     OPENFILENAME ofn;
     wchar_t szFile[260] = { 0 };
 
     ZeroMemory(&ofn, sizeof(ofn));
     ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hwnd;
+    ofn.hwndOwner = hwndOwner;
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile);
     ofn.lpstrFilter = L"CSV Files (*.csv)\0*.csv\0All Files (*.*)\0*.*\0";
@@ -82,7 +82,7 @@ void OnOpenFile(HWND hwnd, HWND hwndListView) {
     ofn.lpstrFileTitle = NULL;
     ofn.nMaxFileTitle = 0;
     ofn.lpstrInitialDir = NULL;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER;
 
     if (GetOpenFileName(&ofn) == TRUE) {
         std::wstring ws(szFile);
@@ -91,10 +91,10 @@ void OnOpenFile(HWND hwnd, HWND hwndListView) {
         if (g_BudgetManager.loadRawDataFile(filePath)) {
             g_BudgetManager.saveBudgetFile();
             RefreshData(hwndListView);
-            MessageBox(hwnd, L"Data added and merged successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
-            InvalidateRect(hwnd, NULL, TRUE);
+            MessageBox(hwndOwner, L"Raw data integrated and permanently saved to master local database!", L"Success", MB_OK | MB_ICONINFORMATION);
+            InvalidateRect(hwndOwner, NULL, TRUE);
         } else {
-            MessageBox(hwnd, L"Failed to parse the chosen CSV file.", L"Error", MB_OK | MB_ICONERROR);
+            MessageBox(hwndOwner, L"Failed to read or parse the chosen raw CSV format.", L"Parsing Error", MB_OK | MB_ICONERROR);
         }
     }
 }
@@ -117,8 +117,8 @@ void DrawBudgetCircleAndSummary(HWND hwnd, HDC hdc) {
     std::wstring summaryOut = L"Total Out (Spending): $" + std::to_wstring(static_cast<int>(totalSpending));
     std::wstring summaryIn  = L"Total In (Payments):  $" + std::to_wstring(static_cast<int>(totalPayments));
     
-    TextOut(hdc, 20, 155, summaryOut.c_str(), summaryOut.length());
-    TextOut(hdc, 20, 175, summaryIn.c_str(), summaryIn.length());
+    TextOut(hdc, 20, 155, summaryOut.c_str(), static_cast<int>(summaryOut.length()));
+    TextOut(hdc, 20, 175, summaryIn.c_str(), static_cast<int>(summaryIn.length()));
 
     int left = 35, top = 205, right = 165, bottom = 335;
     int centerX = (left + right) / 2;
@@ -166,7 +166,7 @@ void DrawBudgetCircleAndSummary(HWND hwnd, HDC hdc) {
 
         std::wstring catName(pair.first.begin(), pair.first.end());
         std::wstring label = catName + L": $" + std::to_wstring(static_cast<int>(pair.second));
-        TextOut(hdc, 38, legendY, label.c_str(), label.length());
+        TextOut(hdc, 38, legendY, label.c_str(), static_cast<int>(label.length()));
 
         legendY += 18;
         colorIndex++;
@@ -208,7 +208,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                                      20, 85, 160, 200, hwnd, (HMENU)ID_COMBO_YEAR, NULL, NULL);
         const wchar_t* years[] = { L"2024", L"2025", L"2026", L"2027" };
         for (int i = 0; i < 4; ++i) SendMessage(hwndComboYear, CB_ADDSTRING, 0, (LPARAM)years[i]);
-        SendMessage(hwndComboYear, CB_SETCURSEL, 2, 0); // Default to 2026
+        SendMessage(hwndComboYear, CB_SETCURSEL, 2, 0); 
 
         CreateWindow(L"BUTTON", L"Visual Breakdown (Category Spending)", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 
                      10, 135, 190, 310, hwnd, NULL, NULL, NULL);
@@ -235,7 +235,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     case WM_COMMAND: {
         if (HIWORD(wParam) == CBN_SELCHANGE) {
             if (LOWORD(wParam) == ID_COMBO_MONTH) {
-                g_SelectedMonth = (int)SendMessage(hwndComboMonth, CB_GETCURSEL, 0, 0) + 1;
+                g_SelectedMonth = static_cast<int>(SendMessage(hwndComboMonth, CB_GETCURSEL, 0, 0)) + 1;
             } else if (LOWORD(wParam) == ID_COMBO_YEAR) {
                 wchar_t yearStr[8];
                 SendMessage(hwndComboYear, CB_GETLBTEXT, SendMessage(hwndComboYear, CB_GETCURSEL, 0, 0), (LPARAM)yearStr);
@@ -281,7 +281,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    const wchar_t CLASS_NAME[] = L"Win98BudgetManagerClassV2";
+    const wchar_t CLASS_NAME[] = L"Win98BudgetManagerClassV3";
     WNDCLASS wc = {0};
     wc.lpfnWndProc   = WindowProc;
     wc.hInstance     = hInstance;
@@ -290,7 +290,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     RegisterClass(&wc);
 
-    HWND hwnd = CreateWindowEx(0, CLASS_NAME, L"Personal Budget Manager (Win32 Extended Edition)", 
+    HWND hwnd = CreateWindowEx(0, CLASS_NAME, L"Personal Budget Manager", 
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 
                                CW_USEDEFAULT, CW_USEDEFAULT, 800, 515, NULL, NULL, hInstance, NULL);
 
