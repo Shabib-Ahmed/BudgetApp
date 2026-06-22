@@ -1,0 +1,28 @@
+build/
+*.csv
+
+# macOS Customizations
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# VS Code Customizations
+.vscode/ipch/
+.vscode/.cmaketools/
+*.code-workspace
+
+# C++ / g++ Compiling Outputs
+*.exe
+*.out
+*.o
+*.obj
+*.d
