@@ -28,7 +28,7 @@ A lightweight Windows desktop application for tracking and visualizing personal 
 ### Building
 
 ```bash
-git clone https://github.com/yourusername/BudgetApp.git
+git clone https://github.com/shabib-ahmed/BudgetApp.git
 cd BudgetApp
 mkdir build && cd build
 cmake ..
